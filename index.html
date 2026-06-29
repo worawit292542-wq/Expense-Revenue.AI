@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Finance Tracker (Persistent Chat Edition)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* ตั้งค่าพื้นฐานและแอนิเมชันพื้นหลังเคลื่อนไหว */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            /* พื้นหลังเคลื่อนไหวแบบ ส้ม-ดำ (เปลวไฟ) */
+            background: linear-gradient(-45deg, #000000, #1a0900, #4a1a00, #2b0e00, #000000);
+            background-size: 400% 400%;
+            animation: gradientAnimation 12s ease infinite;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* อนุภาคประกายไฟลอยขึ้น */
+        .ember {
+            position: fixed;
+            bottom: -10px;
+            width: 6px;
+            height: 6px;
+            background: radial-gradient(circle, #ffcf6b, #ff7a00 60%, transparent);
+            border-radius: 50%;
+            box-shadow: 0 0 8px 2px rgba(255, 140, 0, 0.8);
+            pointer-events: none;
+            z-index: 0;
+            animation: emberRise linear infinite;
+            opacity: 0;
+        }
+
+        @keyframes emberRise {
+            0% {
+                transform: translateY(0) translateX(0) scale(1);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            50% {
+                transform: translateY(-50vh) translateX(15px) scale(0.8);
+            }
+            100% {
+                transform: translateY(-105vh) translateX(-10px) scale(0.2);
+                opacity: 0;
+            }
+        }
+
+        /* เปลวไฟเรืองแสงด้านล่างจอ */
+        .fire-glow {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 160px;
+            background: radial-gradient(ellipse at bottom, rgba(255, 106, 0, 0.45), rgba(255, 60, 0, 0.15) 40%, transparent 75%);
+            pointer-events: none;
+            z-index: 0;
+            animation: flicker 3s ease-in-out infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 0.7; transform: scaleY(1); }
+            25% { opacity: 1; transform: scaleY(1.08); }
+            50% { opacity: 0.55; transform: scaleY(0.95); }
+            75% { opacity: 0.9; transform: scaleY(1.03); }
+        }
+
+        /* กล่องแอปพลิเคชัน */
+        .chat-container {
+            width: 100%;
+            max-width: 500px;
+            height: 85vh;
+            background: rgba(15, 15, 15, 0.85);
+            border: 2px solid #ff7a00;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 1;
+            animation: containerPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes containerPulse {
+            0%, 100% { box-shadow: 0 0 25px rgba(255, 122, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 140, 0, 0.55); }
+        }
+
+        /* ส่วนหัวและปุ่มล้างข้อมูล */
+        .chat-header {
+            padding: 20px;
+            background: rgba(255, 122, 0, 0.1);
+            border-bottom: 1px solid rgba(255, 122, 0, 0.3);
+            border-top-left-radius: 14px;
+            border-top-right-radius: 14px;
+        }
+
+        .header-title-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h2 {
+            font-size: 1.4rem;
+            color: #ffb24d;
+            letter-spacing: 1px;
+            animation: titleFlame 2.2s ease-in-out infinite;
+        }
+
+        @keyframes titleFlame {
+            0%, 100% { text-shadow: 0 0 8px rgba(255, 178, 77, 0.5), 0 0 16px rgba(255, 90, 0, 0.3); }
+            50% { text-shadow: 0 0 14px rgba(255, 200, 100, 0.9), 0 0 26px rgba(255, 110, 0, 0.6); }
+        }
+
+        .clear-btn {
+            background: transparent;
+            border: 1px solid #ff7a00;
+            color: #ff7a00;
+            padding: 5px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: #ff7a00;
+            color: #fff;
+            box-shadow: 0 0 8px rgba(255, 122, 0, 0.6);
+        }
+
+        .header-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .guide-btn {
+            background: transparent;
+            border: 1px solid #ffb24d;
+            color: #ffb24d;
+            padding: 5px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .guide-btn:hover {
+            background: #ffb24d;
+            color: #1a0900;
+            box-shadow: 0 0 8px rgba(255, 178, 77, 0.6);
+        }
+
+        /* แผงคู่มือย่อ ซ่อน/แสดงได้ */
+        .guide-panel {
+            display: none;
+            background: rgba(255, 122, 0, 0.06);
+            border-bottom: 1px solid rgba(255, 122, 0, 0.3);
+            padding: 14px 18px;
+            font-size: 0.8rem;
+            color: #e0c9b8;
+            line-height: 1.6;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .guide-panel.open {
+            display: block;
+        }
+
+        .guide-panel h4 {
+            color: #ffb24d;
+            font-size: 0.85rem;
+            margin: 10px 0 4px 0;
+        }
+
+        .guide-panel h4:first-child {
+            margin-top: 0;
+        }
+
+        .guide-panel ul {
+            margin: 0 0 4px 18px;
+            padding: 0;
+        }
+
+        .guide-panel code {
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: #ffd9a3;
+        }
+
+        .guide-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .guide-panel::-webkit-scrollbar-thumb {
+            background-color: #ff7a00;
+            border-radius: 10px;
+        }
+
+        .chat-header p {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* ส่วนแสดงข้อความการสนทนา */
+        .chat-box {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* ตกแต่ง Scrollbar */
+        .chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-box::-webkit-scrollbar-thumb {
+            background-color: #ff7a00;
+            border-radius: 10px;
+        }
+
+        /* สไตล์ของข้อความ */
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .user-message {
+            background: #ff7a00;
+            color: #ffffff;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+            box-shadow: 0 4px 10px rgba(255, 122, 0, 0.3);
+        }
+
+        .ai-message {
+            background: #222222;
+            color: #e0e0e0;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* ตารางสรุปในแชท */
+        .summary-card {
+            margin-top: 10px;
+            background: #111;
+            border: 1px solid #ff7a00;
+            border-radius: 8px;
+            padding: 10px;
+            width: 100%;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .summary-row.total {
+            border-top: 1px dashed #ff7a00;
+            border-bottom: none;
+            font-weight: bold;
+            color: #ffb24d;
+            margin-top: 5px;
+            padding-top: 8px;
+        }
+
+        .excel-btn {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            padding: 10px;
+            background: linear-gradient(135deg, #ff7a00, #cc5500);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 122, 0, 0.4);
+            transition: transform 0.15s, box-shadow 0.2s;
+        }
+
+        .excel-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 16px rgba(255, 140, 0, 0.7);
+        }
+
+        /* ส่วนฟอร์มส่งข้อมูล */
+        .input-area {
+            padding: 15px;
+            background: rgba(10, 10, 10, 0.9);
+            border-top: 1px solid rgba(255, 122, 0, 0.2);
+            display: flex;
+            gap: 10px;
+            border-bottom-left-radius: 14px;
+            border-bottom-right-radius: 14px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px;
+            background: #151515;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .input-area input:focus {
+            border-color: #ff7a00;
+            box-shadow: 0 0 8px rgba(255, 122, 0, 0.4);
+        }
+
+        .input-area button {
+            padding: 0 20px;
+            background: #ff7a00;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .input-area button:hover {
+            background: #cc5500;
+        }
+
+        /* ตัวจัดการวันที่ */
+        .input-area input[type="date"] {
+            flex: 0 0 auto;
+            width: 140px;
+            background: #151515;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .input-area input[type="date"]:focus {
+            border-color: #ff7a00;
+            box-shadow: 0 0 8px rgba(255, 122, 0, 0.4);
+        }
+
+        .date-info {
+            font-size: 0.85rem;
+            color: #ffb24d;
+            margin-top: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="fire-glow"></div>
+    <div id="emberContainer"></div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-title-container">
+                <h2>AI FINANCE ASSISTANT</h2>
+                <div class="header-btns">
+                    <button class="guide-btn" onclick="toggleGuide()">📖 วิธีใช้</button>
+                    <button class="clear-btn" onclick="clearAllData()">ล้างประวัติ</button>
+                </div>
+            </div>
+            <p>พิมพ์บันทึกรายรับ-รายจ่าย หรือพิมพ์ "ขอสรุปรายได้-ค่าใช้จ่าย"</p>
+        </div>
+
+        <div class="guide-panel" id="guidePanel">
+            <h4>📝 บันทึกรายการ</h4>
+            <ul>
+                <li>พิมพ์ <code>ชื่อรายการ จำนวนเงิน บาท</code> เช่น <code>ค่าข้าว 50 บาท</code></li>
+                <li>มีคำว่า "รายได้/เงินเดือน/รับเงิน/โบนัส/รับ" ฯลฯ = รายรับ 🟢 ถ้าไม่มี = รายจ่าย 🔴 โดยอัตโนมัติ</li>
+            </ul>
+            <h4>📦 หลายรายการในข้อความเดียว</h4>
+            <ul>
+                <li>ใส่ทุกรายการต่อกัน แต่ละรายการต้องลงท้าย "บาท" เช่น <code>ค่าขนม 50 บาท ค่าข้าว 50 บาท รับเงินคืน 100 บาท</code></li>
+            </ul>
+            <h4>📅 ระบุวันที่เอง (ไม่ใส่ = วันนี้)</h4>
+            <ul>
+                <li><code>วันที่ 29/6/69 ค่าน้ำมัน 300 บาท</code> (รองรับ พ.ศ. 2 หรือ 4 หลัก)</li>
+            </ul>
+            <h4>📊 ดูสรุป / ล้างข้อมูล</h4>
+            <ul>
+                <li>พิมพ์ <code>ขอสรุปรายได้-ค่าใช้จ่าย</code> เพื่อดูสรุปยอดวันนี้ + ดาวน์โหลด Excel ได้</li>
+                <li>กด "ล้างประวัติ" เพื่อลบข้อมูลทั้งหมด (ลบแล้วกู้คืนไม่ได้)</li>
+            </ul>
+        </div>
+        
+        <div class="chat-box" id="chatBox">
+            <div class="message ai-message" id="defaultWelcome">
+                สวัสดีครับ! ผมคือ AI บันทึกบัญชีของคุณ พิมพ์บอกผมได้เลย เช่น "เงินเดือนออก 30000 บาท" หรือ "ค่าส้มตำ 120 บาท" ครับ
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="date" id="recordDate" title="เลือกวันที่ (ถ้าไม่เลือกจะใช้วันนี้)">
+            <input type="text" id="userInput" placeholder="พิมพ์ข้อความที่นี่... (หรือใส่วันที่ตามข้อความ เช่น วันที่ 26/6/69 ราคา 50)" onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">ส่ง</button>
+        </div>
+    </div>
+
+    <script>
+        // สร้างอนุภาคประกายไฟลอยขึ้นแบบสุ่ม
+        function spawnEmber() {
+            const container = document.getElementById('emberContainer');
+            const ember = document.createElement('div');
+            ember.className = 'ember';
+            const left = Math.random() * 100;
+            const duration = 4 + Math.random() * 5;
+            const size = 3 + Math.random() * 5;
+            ember.style.left = left + 'vw';
+            ember.style.width = size + 'px';
+            ember.style.height = size + 'px';
+            ember.style.animationDuration = duration + 's';
+            container.appendChild(ember);
+            setTimeout(() => ember.remove(), duration * 1000);
+        }
+        setInterval(spawnEmber, 350);
+
+        // โหลดข้อมูลจาก LocalStorage
+        let financeData = JSON.parse(localStorage.getItem('ai_finance_data')) || [];
+        let chatHistory = JSON.parse(localStorage.getItem('ai_chat_history')) || [];
+
+        // ตั้งค่าวันที่ปัจจุบันเป็นค่าเริ่มต้นในฟิลด์วันที่
+        function initializeDateInput() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('recordDate').value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        // เมื่อหน้าเว็บโหลดเสร็จ ให้ดึงประวัติแชทเก่ามาแสดงทันที
+        window.onload = function() {
+            initializeDateInput();
+            if (chatHistory.length > 0) {
+                // ล้างข้อความต้อนรับเริ่มต้นออก เพื่อเอาประวัติจริงที่เคยคุยมาแสดง
+                document.getElementById('chatBox').innerHTML = '';
+                chatHistory.forEach(msg => {
+                    appendMessage(msg.content, msg.className, false); // false = ไม่เซฟซ้ำตอนโหลดใหม่
+                });
+            }
+        };
+
+        // ฟังก์ชันแสดง/ซ่อนแผงคู่มือย่อ
+        function toggleGuide() {
+            document.getElementById('guidePanel').classList.toggle('open');
+        }
+
+        // ฟังก์ชันจัดการการกดปุ่ม Enter
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // ฟังก์ชันหลักในการส่งและประมวลผลข้อความ
+        function sendMessage() {
+            const inputEl = document.getElementById('userInput');
+            const messageText = inputEl.value.trim();
+            if (!messageText) return;
+
+            // แสดงข้อความของผู้ใช้ในหน้าต่างแชท และบันทึกลงคลัง
+            appendMessage(messageText, 'user-message', true);
+            inputEl.value = '';
+
+            // AI ประมวลผลคำตอบ
+            setTimeout(() => {
+                const aiResponse = parseAIInput(messageText);
+                appendMessage(aiResponse, 'ai-message', true);
+            }, 500);
+        }
+
+        // ฟังก์ชันเพิ่ม Element ข้อความลงในหน้าต่างแชท และจัดการการเซฟลงเครื่อง
+        function appendMessage(htmlContent, className, shouldSave = true) {
+            const chatBox = document.getElementById('chatBox');
+            
+            // ถ้านี่เป็นข้อความแรกที่คุย ให้ซ่อน Default Welcome ข้อความเริ่มต้นออกไปก่อน
+            const defWelcome = document.getElementById('defaultWelcome');
+            if (defWelcome) defWelcome.remove();
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${className}`;
+            msgDiv.innerHTML = htmlContent;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight; // เลื่อนแชทลงมาล่างสุด
+
+            // เซฟประวัติข้อความลงฐานข้อมูลของเบราว์เซอร์
+            if (shouldSave) {
+                chatHistory.push({ content: htmlContent, className: className });
+                localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+            }
+        }
+
+        // ฟังก์ชันค้นหาวันที่จากข้อความ เช่น "วันที่ 29/6/69" และแปลงเป็น dateString รูปแบบเดียวกับ th-TH
+        function extractDateFromText(text) {
+            const m = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            if (!m) return null;
+            let d = parseInt(m[1], 10);
+            let mo = parseInt(m[2], 10);
+            let y = parseInt(m[3], 10);
+
+            // รองรับปี พ.ศ. แบบ 2 หลัก (เช่น 69 -> 2569) และ 4 หลัก (เช่น 2569)
+            if (y < 100) y += 2500;
+
+            const adYear = y > 2400 ? y - 543 : y; // แปลง พ.ศ. -> ค.ศ. สำหรับสร้าง timestamp
+            const dateObj = new Date(adYear, mo - 1, d);
+            const beYear = y > 2400 ? y : y + 543;
+            const dateString = `${d}/${mo}/${beYear}`; // รูปแบบเดียวกับ toLocaleDateString('th-TH')
+
+            return { dateObj, dateString, matchText: m[0] };
+        }
+
+        // ฟังก์ชันวิเคราะห์ข้อความ 1 รายการ (คำอธิบาย + จำนวนเงิน) แล้วคืนค่าข้อมูลที่จำเป็น
+        function parseSingleItem(itemText) {
+            const moneyMatch = itemText.match(/\d+(\.\d+)?/);
+            if (!moneyMatch) return null;
+            const amount = parseFloat(moneyMatch[0]);
+
+            let type = 'expense';
+            let typeLabel = '🔴 รายจ่าย';
+            const incomeKeywords = ['รายได้', 'เงินเดือน', 'รับเงิน', 'ได้เงิน', 'ขายของได้', 'ถูกหวย', 'โบนัส', 'รับ'];
+
+            for (let word of incomeKeywords) {
+                if (itemText.includes(word)) {
+                    type = 'income';
+                    typeLabel = '🟢 รายรับ';
+                    break;
+                }
+            }
+
+            let category = 'ทั่วไป';
+            if (itemText.includes('ข้าว') || itemText.includes('กิน') || itemText.includes('อาหาร') || itemText.includes('น้ำ') || itemText.includes('ชา') || itemText.includes('ขนม')) category = 'อาหารและเครื่องดื่ม';
+            else if (itemText.includes('รถ') || itemText.includes('เดินทาง') || itemText.includes('น้ำมัน') || itemText.includes('แท็กซี่')) category = 'การเดินทาง';
+            else if (itemText.includes('เสื้อ') || itemText.includes('ช้อป') || itemText.includes('ซื้อของ')) category = 'ช้อปปิ้ง';
+            else if (itemText.includes('ห้อง') || itemText.includes('บ้าน') || itemText.includes('ไฟ') || itemText.includes('เน็ต')) category = 'ที่อยู่อาศัย';
+            else if (type === 'income') category = 'รายได้หลัก/เสริม';
+
+            return { amount, type, typeLabel, category };
+        }
+
+        // ระบบจำลอง AI ประมวลผลภาษา (Natural Language Processing) รองรับหลายรายการในข้อความเดียว
+        function parseAIInput(text) {
+            const todayStr = new Date().toLocaleDateString('th-TH');
+
+            if (text.includes("ขอสรุปรายได้-ค่าใช้จ่าย")) {
+                return generateTodaySummary();
+            }
+
+            // 1) ดึงวันที่ออกจากข้อความ (ถ้ามี) แล้วตัดส่วนวันที่และคำว่า "วันที่" ออก
+            let workingText = text;
+            let dateString = todayStr;
+            let dateTimestamp = new Date().getTime();
+
+            const dateInfo = extractDateFromText(text);
+            if (dateInfo) {
+                dateString = dateInfo.dateString;
+                dateTimestamp = dateInfo.dateObj.getTime();
+                workingText = workingText.replace(dateInfo.matchText, '');
+                workingText = workingText.replace(/วันที่/g, '');
+            }
+
+            // 2) แยกข้อความออกเป็นรายการย่อยๆ โดยใช้คำว่า "บาท" เป็นตัวแบ่ง
+            //    เช่น "มี ค่าขนม 50 บาท ค่าข้าว 50 บาท รับเงินคืน 100 บาท" -> 3 รายการ
+            const rawParts = workingText.split('บาท');
+            const itemTexts = rawParts
+                .map(p => p.replace(/^\s*(มี|และ|,|:|ๆ)\s*/, '').trim())
+                .filter(p => /\d+(\.\d+)?/.test(p));
+
+            if (itemTexts.length === 0) {
+                return "ขออภัยครับ ฉันไม่พบจำนวนเงินในข้อความของคุณ กรุณาระบุจำนวนเงินเป็นตัวเลขด้วยครับ (เช่น 'ซื้อชานม 60 บาท')";
+            }
+
+            // 3) ประมวลผลทุกรายการ บันทึกลง financeData และสร้างสรุปผลลัพธ์
+            const savedRecords = [];
+            for (const itemText of itemTexts) {
+                const parsed = parseSingleItem(itemText);
+                if (!parsed) continue;
+
+                const newRecord = {
+                    timestamp: dateTimestamp,
+                    dateString: dateString,
+                    text: itemText,
+                    type: parsed.type,
+                    amount: parsed.amount,
+                    category: parsed.category
+                };
+                financeData.push(newRecord);
+                savedRecords.push({ ...parsed, text: itemText });
+            }
+
+            if (savedRecords.length === 0) {
+                return "ขออภัยครับ ฉันไม่พบจำนวนเงินในข้อความของคุณ กรุณาระบุจำนวนเงินเป็นตัวเลขด้วยครับ (เช่น 'ซื้อชานม 60 บาท')";
+            }
+
+            localStorage.setItem('ai_finance_data', JSON.stringify(financeData));
+
+            // 4) ถ้ามีรายการเดียว ตอบแบบเดิม ถ้ามีหลายรายการ ตอบสรุปเป็นรายการ
+            if (savedRecords.length === 1) {
+                const r = savedRecords[0];
+                return `🤖 <b>AI บันทึกสำเร็จ!</b><br>
+                        📅 วันที่: ${dateString}<br>
+                        -----------------------------<br>
+                        ประเภท: ${r.typeLabel}<br>
+                        หมวดหมู่: ${r.category}<br>
+                        จำนวนเงิน: <b>${r.amount.toLocaleString()} บาท</b>`;
+            }
+
+            let listHtml = '';
+            let totalIncome = 0;
+            let totalExpense = 0;
+            savedRecords.forEach(r => {
+                if (r.type === 'income') {
+                    totalIncome += r.amount;
+                    listHtml += `<div class="summary-row"><span>${r.text} (รับ)</span><span style="color:#00ff66">+${r.amount.toLocaleString()}</span></div>`;
+                } else {
+                    totalExpense += r.amount;
+                    listHtml += `<div class="summary-row"><span>${r.text} (จ่าย)</span><span style="color:#ffb24d">-${r.amount.toLocaleString()}</span></div>`;
+                }
+            });
+
+            return `🤖 <b>AI บันทึกสำเร็จ ${savedRecords.length} รายการ!</b><br>
+                    📅 วันที่: ${dateString}
+                    <div class="summary-card">
+                        ${listHtml}
+                        <div class="summary-row total"><span>รวมรายรับ:</span><span style="color:#00ff66">${totalIncome.toLocaleString()} บาท</span></div>
+                        <div class="summary-row total" style="border-top:none;"><span>รวมรายจ่าย:</span><span style="color:#ffb24d">${totalExpense.toLocaleString()} บาท</span></div>
+                    </div>`;
+        }
+
+        // ฟังก์ชันสร้างการแสดงผลสรุปเฉพาะ "วันปัจจุบัน"
+        function generateTodaySummary() {
+            const todayStr = new Date().toLocaleDateString('th-TH');
+            const todayRecords = financeData.filter(item => item.dateString === todayStr);
+
+            if (todayRecords.length === 0) {
+                return `🤖 <b>สรุปรายได้-ค่าใช้จ่าย วันที่ ${todayStr}</b><br>ยังไม่มีการบันทึกข้อมูลของวันนี้เข้ามาครับ`;
+            }
+
+            let totalIncome = 0;
+            let totalExpense = 0;
+            let listHtml = '';
+
+            todayRecords.forEach(item => {
+                if (item.type === 'income') {
+                    totalIncome += item.amount;
+                    listHtml += `<div class="summary-row"><span>${item.category} (รับ)</span><span style="color:#00ff66">+${item.amount.toLocaleString()}</span></div>`;
+                } else {
+                    totalExpense += item.amount;
+                    listHtml += `<div class="summary-row"><span>${item.category} (จ่าย)</span><span style="color:#ffb24d">-${item.amount.toLocaleString()}</span></div>`;
+                }
+            });
+
+            let balance = totalIncome - totalExpense;
+            let balanceColor = balance >= 0 ? '#00ff66' : '#ffb24d';
+
+            // เก็บข้อมูลสรุปวันนี้ไว้ใช้ตอนกดปุ่มดาวน์โหลด Excel
+            lastSummaryExport = { todayStr, records: todayRecords, totalIncome, totalExpense, balance };
+
+            return `🤖 <b>สรุปรายได้-ค่าใช้จ่ายประจำวันนี้</b><br>
+                    📅 วันที่: ${todayStr}
+                    <div class="summary-card">
+                        ${listHtml}
+                        <div class="summary-row total"><span>รวมรายรับ:</span><span style="color:#00ff66">${totalIncome.toLocaleString()} บาท</span></div>
+                        <div class="summary-row total" style="border-top:none;"><span>รวมรายจ่าย:</span><span style="color:#ffb24d">${totalExpense.toLocaleString()} บาท</span></div>
+                        <div class="summary-row total" style="border-top:1px solid #fff;"><span>คงเหลือสุทธิ:</span><span style="color:${balanceColor}">${balance.toLocaleString()} บาท</span></div>
+                        <button class="excel-btn" onclick="exportSummaryToExcel()">📊 ดาวน์โหลดเป็น Excel</button>
+                    </div>`;
+        }
+
+        // ฟังก์ชันสร้างไฟล์ Excel (.xlsx) จากข้อมูลสรุปล่าสุดและดาวน์โหลดให้ผู้ใช้
+        let lastSummaryExport = null;
+        function exportSummaryToExcel() {
+            if (!lastSummaryExport) {
+                alert('ไม่มีข้อมูลสรุปให้ดาวน์โหลดครับ');
+                return;
+            }
+            const { todayStr, records, totalIncome, totalExpense, balance } = lastSummaryExport;
+
+            // เตรียมข้อมูลแถวรายการ
+            const rows = records.map(item => ({
+                'วันที่': item.dateString,
+                'ประเภท': item.type === 'income' ? 'รายรับ' : 'รายจ่าย',
+                'หมวดหมู่': item.category,
+                'รายละเอียด': item.text,
+                'จำนวนเงิน (บาท)': item.amount
+            }));
+
+            // แถวสรุปท้ายตาราง
+            rows.push({});
+            rows.push({ 'วันที่': '', 'ประเภท': '', 'หมวดหมู่': '', 'รายละเอียด': 'รวมรายรับ', 'จำนวนเงิน (บาท)': totalIncome });
+            rows.push({ 'วันที่': '', 'ประเภท': '', 'หมวดหมู่': '', 'รายละเอียด': 'รวมรายจ่าย', 'จำนวนเงิน (บาท)': totalExpense });
+            rows.push({ 'วันที่': '', 'ประเภท': '', 'หมวดหมู่': '', 'รายละเอียด': 'คงเหลือสุทธิ', 'จำนวนเงิน (บาท)': balance });
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            worksheet['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 30 }, { wch: 16 }];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปรายวัน');
+
+            const fileName = `สรุปรายรับรายจ่าย_${todayStr.replace(/\//g, '-')}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+        }
+
+        // ฟังก์ชันล้างข้อมูลทั้งหมดเมื่อผู้ใช้กดปุ่ม
+        function clearAllData() {
+            if (confirm("คุณต้องการล้างประวัติการคุยและข้อมูลการเงินทั้งหมดใช่หรือไม่? (ข้อมูลจะหายถาวร)")) {
+                localStorage.removeItem('ai_finance_data');
+                localStorage.removeItem('ai_chat_history');
+                financeData = [];
+                chatHistory = [];
+                
+                // รีเซ็ตหน้าจอแชทกลับไปเป็นค่าเริ่มต้น
+                document.getElementById('chatBox').innerHTML = `
+                    <div class="message ai-message" id="defaultWelcome">
+                        ระบบถูกรีเซ็ตแล้วครับ พิมพ์บอกผมได้เลย เช่น "เงินเดือนออก 30000 บาท" หรือ "ค่าส้มตำ 120 บาท" ครับ
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
